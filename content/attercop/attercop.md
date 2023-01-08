@@ -1,10 +1,10 @@
-Title: Inline natural language command prompt generations with Attercop
-Date: 2023-01-07 21:55
+Title: Attercop: In-line shell command generations with natural language
+Date: 2023-01-08 12:15
 Category: Projects
 
 ## Well what's this now?
 
-Hello! I'm so glad you asked. I'm going to kick this blog off by describing [a tiny project I recently cooked up called Attercop.](https://github.com/msnidal/attercop) It's a simple command-line tool that takes a natural language prompt describing a desired outcome (ie. "search all the logfiles in this folder and subdirectories for any mentions of kittens"), hits the OpenAI text completion API, and generates one or alternative command(s) for you to execute. For example:
+Hello! I'm so glad you asked. I'm going to kick this blog off by describing [a tiny project I recently cooked up called Attercop.](https://github.com/msnidal/attercop) It's a simple shell program that takes a natural language prompt describing a desired outcome (ie. "search all the logfiles in this folder and subdirectories for any mentions of kittens"), hits the OpenAI text completion API, and generates one or alternative command(s) for you to execute. For example:
 
 ```python
 attercop "Search the file named 'foo.txt' for any instances of the string 'bar', returning the line number and the line itself"
@@ -28,7 +28,7 @@ So, it should be pretty clear the direction I'm going here. While its easy to po
 
 >wouldn't it be cool if I could just describe what I want done, and it would spit out a command or sequence of commands for me to review and execute?
 
-Well, that's a pretty simple problem, I can probably just write a script that does that. And that's how Attercop was born! It's a simple command-line Python script that takes a provided natural language prompt describing a desired outcome. For example, if you want to:
+Well, that's a pretty simple problem, I can probably just write a script that does that. And that's how Attercop was born! It's a Python program that takes a provided natural language prompt describing a desired outcome and generates some commands that could do the job. For example, if you want to:
 
 * List, filter, and sort files in a directory in a specific way
 * Mass rename or copy files matching a certain pattern
@@ -139,11 +139,13 @@ Skipping over some argument parsing, and well what do you know! This is where th
         pyperclip.copy(output)
 ```
 
-Finally, we just need to handle the user's input. I'm using `sys.stdin.read(1)` to read a single character from the user, and then using structural pattern matching to handle the different cases. If the user presses `y` or `enter`, we accept the command and execute it. If they press `c`, we copy it to the clipboard. If they press `tab`, we cycle through the different options and try again. If they press `q` or `ctrl-c` or `ctrl-d`, we exit. Critically, we are showing the user the command they are about to execute or copy to the clipboard, so they can make sure it's what they want - we wouldn't want to accidentally run `rm -rf /` or something, so nothing will get executed without the user's explicit confirmation.
+Finally, we just need to handle the user's input. I'm using [raw TTY input](https://docs.python.org/3/library/tty.html) and `sys.stdin.read(1)` to read a single character from the user, and then using structural pattern matching to handle the different cases. If the user presses `y` or `enter`, we accept the command and execute it. If they press `c`, we copy it to the clipboard. If they press `tab`, we cycle through the different options and try again. If they press `q` or `ctrl-c` or `ctrl-d`, we exit.
+
+Critically, we are showing the user the command they are about to execute or copy to the clipboard, so they can make sure it's what they want - we wouldn't want to accidentally run `rm -rf /` or something, so nothing will get executed without the user's explicit confirmation. There is probably more we could be doing here - for example, checking for the presence of `sudo` or `rm` in the command and warning the user and requiring an additional confirmation if so would be a good idea.
 
 ## Ok alright alright I got it... Can I try it out?
 
-No! Just kidding. Yes. You can just install it with pip:
+No! Just kidding. Yes. You can install it with pip:
 
 ```bash
 pip install attercop
@@ -169,4 +171,4 @@ And there we have it! I hope you enjoyed this little project. And if you didn't,
 
 ## What's next?
 
-Well, hopefully our new AGI overlords hold off on nuking us a la Terminator 2 for the time being. Barring that, however, I would love to support querying against locally-hosted GPT variants. Also, while in principle this could work on windows in powershell or something, the prompt would need to be adjusted so system detection and subsequent prompt variation would be a cool feature to add here. If you have any ideas, [please do open an issue](https://github.com/msnidal/attercop/issues) or fork it and shoot me a pull request for that matter! Seriously, its lonely out here in the GitHub void. And on that note, I'm going to go back to my cave now. Goodbye and thanks for reading!
+Well, hopefully our new AGI overlords hold off on nuking us a la Terminator 2 for the time being. Barring that, however, I would love to support querying against locally-hosted GPT variants. Also, while in principle if the input were reworked this could work on windows in powershell or something, the prompt would need to be adjusted so system detection and subsequent prompt variation would be a cool feature to add here. If you have any ideas, [please do open an issue](https://github.com/msnidal/attercop/issues) or fork it and shoot me a pull request for that matter! And of course stars are always welcomed - its lonely out here in the GitHub void. And, on that note, I'm going to go back to my cave now. Goodbye and thanks for reading!
