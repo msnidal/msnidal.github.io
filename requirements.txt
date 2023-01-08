@@ -1,0 +1,2 @@
+pelican[markdown]
+git+https://github.com/nairobilug/pelican-alchemy@fd70e764b4ee100b4c3fa961336af32a3b88f20a#egg=alchemy
