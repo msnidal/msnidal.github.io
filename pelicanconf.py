@@ -18,12 +18,18 @@ AUTHOR_FEED_ATOM = None
 AUTHOR_FEED_RSS = None
 
 # Blogroll
-LINKS = ()
+LINKS = (("GitHub", "https://github.com/msnidal"),("LinkedIn", "https://www.linkedin.com/in/msnidal/"))
 SOCIAL = ()
 
 DEFAULT_PAGINATION = 10
 
 THEME = alchemy.path()
+
+STATIC_PATHS = ["static"]
+EXTRA_PATH_METADATA = {
+    "static/favicon.ico": {"path": "favicon.ico"},
+}
+
 
 # Uncomment following line if you want document-relative URLs when developing
 #RELATIVE_URLS = True
