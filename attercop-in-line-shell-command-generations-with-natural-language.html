@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <!-- Required meta tags -->
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+  <title>  Attercop: In-line shell command generations with natural language | Mark's Yellhorn
+</title>
+  <link rel="canonical" href="/attercop-in-line-shell-command-generations-with-natural-language.html">
+
+
+  <link rel="stylesheet" href="/theme/css/bootstrap.min.css">
+  <link rel="stylesheet" href="/theme/css/fontawesome.min.css">
+  <link rel="stylesheet" href="/theme/css/pygments/default.min.css">
+  <link rel="stylesheet" href="/theme/css/theme.css">
+
+  
+  <meta name="description" content="Well what's this now? Hello! I'm so glad you asked. I'm going to kick this blog off by describing a tiny project I recently cooked up called Attercop. It's a simple shell program that takes a natural language prompt describing a desired outcome (ie. "search all the logfiles in this …">
+
+
+</head>
+
+<body>
+  <header class="header">
+    <div class="container">
+<div class="row">
+  <div class="col-sm-12">
+    <h1 class="title"><a href="/">Mark's Yellhorn</a></h1>
+      <ul class="list-inline">
+          <li class="list-inline-item"><a href="https://github.com/msnidal" target="_blank">GitHub</a></li>
+          <li class="list-inline-item"><a href="https://www.linkedin.com/in/msnidal/" target="_blank">LinkedIn</a></li>
+      </ul>
+  </div>
+</div>    </div>
+  </header>
+
+  <div class="main">
+    <div class="container">
+      <h1>  Attercop: In-line shell command generations with natural language
+</h1>
+      <hr>
+  <article class="article">
+    <header>
+      <ul class="list-inline">
+        <li class="list-inline-item text-muted" title="2023-01-08T12:15:00-05:00">
+          <i class="fas fa-clock"></i>
+          Sun 08 January 2023
+        </li>
+        <li class="list-inline-item">
+          <i class="fas fa-folder-open"></i>
+          <a href="/category/projects.html">Projects</a>
+        </li>
+          <li class="list-inline-item">
+            <i class="fas fa-user"></i>
+              <a href="/author/mark-snidal.html">Mark Snidal</a>          </li>
+      </ul>
+    </header>
+    <div class="content">
+      <h2>Well what's this now?</h2>
+<p>Hello! I'm so glad you asked. I'm going to kick this blog off by describing <a href="https://github.com/msnidal/attercop">a tiny project I recently cooked up called Attercop.</a> It's a simple shell program that takes a natural language prompt describing a desired outcome (ie. "search all the logfiles in this folder and subdirectories for any mentions of kittens"), hits the OpenAI text completion API, and generates one or alternative command(s) for you to execute. For example:</p>
+<div class="highlight"><pre><span></span><code><span class="n">attercop</span> <span class="s2">&quot;Search the file named &#39;foo.txt&#39; for any instances of the string &#39;bar&#39;, returning the line number and the line itself&quot;</span>
+</code></pre></div>
+
+<p>But before I show you what happens, a little background...</p>
+<h2>Motivation</h2>
+<h3>The problem</h3>
+<p>OK, so I've been using Linux and Unix for many years now, and despite being perfectly capable of navigating around a filesystem, piping commands into eachother and generally working comfortably in a shell, I still find myself reaching for Google or manpages when I need to do something specific. I use the <code>fish</code> shell which has pretty great autocomplete, but I often can't help but shake the feeling that I'm doing something suboptimally, or that there may be a clever shortcut or combination of commands that could make my life easier.</p>
+<h3>The sauce</h3>
+<p>Enter the sudden availability of large language models. As with many others I've been playing around OpenAI's text completion API, and I've found it to be a pretty amazing tool. There's not much I can say that will add onto the intensive discourse around GPT and LLMs, other than just to say that at this point I am fairly reliant on GitHub Copilot, for example (as evidenced by me writing this post with it), and as with many others I have been astonished by the capabilities of these models.</p>
+<h2>The idea</h2>
+<p>So, it should be pretty clear the direction I'm going here. While its easy to pop into ChatGPT and ask for some prompts, I figured it would be cool to have something akin to Copilot in the sense that it would let you stay in your current context (namely, the shell) and just ask for a command. Basically...</p>
+<blockquote>
+<p>wouldn't it be cool if I could just describe what I want done, and it would spit out a command or sequence of commands for me to review and execute?</p>
+</blockquote>
+<p>Well, that's a pretty simple problem, I can probably just write a script that does that. And that's how Attercop was born! It's a Python program that takes a provided natural language prompt describing a desired outcome and generates some commands that could do the job. For example, if you want to:</p>
+<ul>
+<li>List, filter, and sort files in a directory in a specific way</li>
+<li>Mass rename or copy files matching a certain pattern</li>
+<li>Do some crazy awk or sed magic</li>
+</ul>
+<p>Or, well, basically anything else you can succinctly describe in a language prompt - Attercop can help you do those things! So let's take a look at how it works.</p>
+<h2>Implementation</h2>
+<p>Firstly, you can <a href="https://github.com/msnidal/attercop">check out the project yourself on GitHub</a>, and all of the relevant code <a href="https://github.com/msnidal/attercop/blob/main/attercop/attercop.py">lives within one file here.</a> There's not exactly a lot going on here, so I'll just walk you through it.</p>
+<h3>Imports</h3>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">argparse</span>
+<span class="o">...</span>
+
+<span class="kn">import</span> <span class="nn">openai</span>
+<span class="kn">import</span> <span class="nn">pyperclip</span>
+</code></pre></div>
+
+<p>Wow, I'm importing stuff. Cool. As you'll see in a second, I use <code>argparse</code> to parse command-line arguments, <code>openai</code> to interact with the OpenAI API, and <code>pyperclip</code> to optionally copy the generated command to the clipboard. There are some other stdlib imports for input handling I'm omitting, and that's basically it.</p>
+<h3>Prompt stuff</h3>
+<div class="highlight"><pre><span></span><code><span class="n">NUM_PROMPTS</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="n">TEMPERATURE</span> <span class="o">=</span> <span class="mi">0</span>
+<span class="n">MAX_TOKENS</span> <span class="o">=</span> <span class="mi">100</span>
+<span class="n">MODEL</span> <span class="o">=</span> <span class="s2">&quot;text-davinci-003&quot;</span>
+<span class="n">BASE_PROMPT</span> <span class="o">=</span> <span class="s2">&quot;&quot;&quot;Convert a prompt into a working programmatic bash command or chain of commands, making use of standard GNU tools and common bash idioms.</span>
+
+<span class="s2">Prompt: </span>
+<span class="s2">List all the files in this directory, filtering out the ones that are not directories, and then sort them by size, largest first.</span>
+<span class="s2">Command:</span>
+<span class="s2">ls -l | grep ^d | sort -k5 -n -r</span>
+
+<span class="s2">Prompt: </span>
+<span class="s2">&quot;&quot;&quot;</span>
+
+<span class="n">openai</span><span class="o">.</span><span class="n">api_key</span> <span class="o">=</span> <span class="n">os</span><span class="o">.</span><span class="n">getenv</span><span class="p">(</span><span class="s2">&quot;OPENAI_API_KEY&quot;</span><span class="p">)</span>
+</code></pre></div>
+
+<p>OK, so immediately we get to our prompt. When the program is run, the user's input will be appended to the end of this, then the API will come back with one or more options which we ultimately allow the user to select from.</p>
+<p>In developing this I tried out a couple different variations, but basically the language model is really great at doing stuff when given strong context, and explicit examples. The key thing here is that I'm immediately providing it with a description of its basic task as well as an example. All of the other constants you see above are provided as defaults to the command-line arguments, so if you really want to crank up the temperature or spit out some crazy-long response you can do that.</p>
+<p>Fun fact about the example: I generated it with Copilot. Yeah, its LLMs all the way down, kid.</p>
+<h3>API call</h3>
+<div class="highlight"><pre><span></span><code><span class="k">def</span> <span class="nf">create_prompt</span><span class="p">():</span>
+    <span class="n">user_prompt</span> <span class="o">=</span> <span class="n">BASE_PROMPT</span> <span class="o">+</span> <span class="n">args</span><span class="o">.</span><span class="n">prompt</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\n</span><span class="s2">Answer:</span><span class="se">\n</span><span class="s2">&quot;</span>
+
+    <span class="n">response</span> <span class="o">=</span> <span class="n">openai</span><span class="o">.</span><span class="n">Completion</span><span class="o">.</span><span class="n">create</span><span class="p">(</span>
+        <span class="n">model</span><span class="o">=</span><span class="n">MODEL</span><span class="p">,</span>
+        <span class="n">prompt</span><span class="o">=</span><span class="n">user_prompt</span><span class="p">,</span>
+        <span class="n">temperature</span><span class="o">=</span><span class="n">TEMPERATURE</span><span class="p">,</span>
+        <span class="n">max_tokens</span><span class="o">=</span><span class="n">MAX_TOKENS</span><span class="p">,</span>
+        <span class="n">top_p</span><span class="o">=</span><span class="mf">1.0</span><span class="p">,</span>
+        <span class="n">n</span><span class="o">=</span><span class="n">NUM_PROMPTS</span><span class="p">,</span>
+        <span class="n">frequency_penalty</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span>
+        <span class="n">presence_penalty</span><span class="o">=</span><span class="mf">0.0</span><span class="p">,</span>
+        <span class="n">stop</span><span class="o">=</span><span class="p">[</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">],</span>
+    <span class="p">)</span>
+
+    <span class="n">outputs</span> <span class="o">=</span> <span class="p">[</span><span class="n">choice</span><span class="o">.</span><span class="n">text</span> <span class="k">for</span> <span class="n">choice</span> <span class="ow">in</span> <span class="n">response</span><span class="o">.</span><span class="n">choices</span><span class="p">]</span>
+    <span class="n">output_set</span> <span class="o">=</span> <span class="nb">set</span><span class="p">(</span><span class="n">outputs</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Skipping over some argument parsing, and well what do you know! This is where the magic happens. We take the user's input, append it to the base prompt, and then send it off to the API. This will then return a list of potential commands to run, from which we create a pool of options. If the answer is unambiguous, the API will often return the same response multiple times, so the set ensures we don't inundate the user with unnecessary duplicates.</p>
+<h3>Input handling</h3>
+<div class="highlight"><pre><span></span><code>    <span class="n">action</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">selected_query</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">try</span><span class="p">:</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">action</span><span class="p">:</span>
+            <span class="n">output</span> <span class="o">=</span> <span class="n">outputs</span><span class="p">[</span><span class="n">selected_query</span><span class="p">]</span>
+
+            <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;(</span><span class="si">{</span><span class="n">selected_query</span><span class="w"> </span><span class="o">+</span><span class="w"> </span><span class="mi">1</span><span class="si">}</span><span class="s2">/</span><span class="si">{</span><span class="nb">len</span><span class="p">(</span><span class="n">output_set</span><span class="p">)</span><span class="si">}</span><span class="s2">): </span><span class="si">{</span><span class="n">output</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">end</span><span class="o">=</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="n">ch</span> <span class="o">=</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="o">.</span><span class="n">read</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+
+            <span class="k">match</span> <span class="n">ch</span><span class="p">:</span>
+                <span class="k">case</span> <span class="s2">&quot;y&quot;</span> <span class="o">|</span> <span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">:</span>
+                    <span class="n">action</span> <span class="o">=</span> <span class="n">ACCEPT</span>
+                <span class="k">case</span> <span class="s2">&quot;c&quot;</span><span class="p">:</span>
+                    <span class="n">action</span> <span class="o">=</span> <span class="n">COPY</span>
+                <span class="k">case</span> <span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">:</span>
+                    <span class="n">selected_query</span> <span class="o">=</span> <span class="p">(</span><span class="n">selected_query</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">%</span> <span class="nb">len</span><span class="p">(</span><span class="n">output_set</span><span class="p">)</span>
+                <span class="k">case</span> <span class="s2">&quot;q&quot;</span> <span class="o">|</span> <span class="s2">&quot;</span><span class="se">\x03</span><span class="s2">&quot;</span> <span class="o">|</span> <span class="s2">&quot;</span><span class="se">\x04</span><span class="s2">&quot;</span><span class="p">:</span>  <span class="c1"># SIGKILL &amp; SIGTERM - not ideal tty handling but hey it works</span>
+                    <span class="k">break</span>
+
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">action</span><span class="p">:</span>
+                <span class="n">sys</span><span class="o">.</span><span class="n">stdout</span><span class="o">.</span><span class="n">write</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span> <span class="o">+</span> <span class="s2">&quot; &quot;</span> <span class="o">*</span> <span class="mi">100</span> <span class="o">+</span> <span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">)</span>
+    <span class="k">finally</span><span class="p">:</span>
+        <span class="n">termios</span><span class="o">.</span><span class="n">tcsetattr</span><span class="p">(</span><span class="n">stdin_descriptor</span><span class="p">,</span> <span class="n">termios</span><span class="o">.</span><span class="n">TCSADRAIN</span><span class="p">,</span> <span class="n">stdin_attributes</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="n">action</span> <span class="o">==</span> <span class="n">ACCEPT</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Executing: </span><span class="si">{</span><span class="n">output</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">subprocess</span><span class="o">.</span><span class="n">run</span><span class="p">(</span><span class="n">output</span><span class="p">,</span> <span class="n">shell</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">action</span> <span class="o">==</span> <span class="n">COPY</span><span class="p">:</span>
+        <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Copying to clipboard: </span><span class="si">{</span><span class="n">output</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="n">pyperclip</span><span class="o">.</span><span class="n">copy</span><span class="p">(</span><span class="n">output</span><span class="p">)</span>
+</code></pre></div>
+
+<p>Finally, we just need to handle the user's input. I'm using <a href="https://docs.python.org/3/library/tty.html">raw TTY input</a> and <code>sys.stdin.read(1)</code> to read a single character from the user, and then using structural pattern matching to handle the different cases. If the user presses <code>y</code> or <code>enter</code>, we accept the command and execute it. If they press <code>c</code>, we copy it to the clipboard. If they press <code>tab</code>, we cycle through the different options and try again. If they press <code>q</code> or <code>ctrl-c</code> or <code>ctrl-d</code>, we exit.</p>
+<p>Critically, we are showing the user the command they are about to execute or copy to the clipboard, so they can make sure it's what they want - we wouldn't want to accidentally run <code>rm -rf /</code> or something, so nothing will get executed without the user's explicit confirmation. There is probably more we could be doing here - for example, checking for the presence of <code>sudo</code> or <code>rm</code> in the command and warning the user and requiring an additional confirmation if so would be a good idea.</p>
+<h2>Ok alright alright I got it... Can I try it out?</h2>
+<p>No! Just kidding. Yes. You can install it with pip:</p>
+<div class="highlight"><pre><span></span><code>pip<span class="w"> </span>install<span class="w"> </span>attercop
+</code></pre></div>
+
+<p>Note that you will need Python 3.10 or higher, as it uses structural pattern matching. If people don't like this I (or you) can definitely just replace that with if/else statements so just open an issue if you are reading this from a time machine in 2021 or something. Last I checked the OpenAI API only supports Python 3.7+ so that would probably be a lower bound on the Python version in any case.</p>
+<p>You will also need to provide your own OpenAI API key and set the environment variable <code>OPENAI_API_KEY</code> to its value. You can get one <a href="https://beta.openai.com/">here</a>. Once you've done all that, you can just run the command we started with:</p>
+<div class="highlight"><pre><span></span><code>attercop<span class="w"> </span><span class="s2">&quot;Search the file named &#39;foo.txt&#39; for any instances of the string &#39;bar&#39;, returning the line number and the line itself&quot;</span>
+<span class="o">(</span><span class="m">1</span>/1<span class="o">)</span>:<span class="w"> </span>grep<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;bar&#39;</span><span class="w"> </span>foo.txt
+</code></pre></div>
+
+<p>I like what I see so I press <code>y</code> and it executes the command:</p>
+<div class="highlight"><pre><span></span><code>Executing:<span class="w"> </span>grep<span class="w"> </span>-n<span class="w"> </span><span class="s1">&#39;bar&#39;</span><span class="w"> </span>foo.txt
+<span class="m">8</span>:a<span class="w"> </span>murder<span class="w"> </span>of<span class="w"> </span>crow<span class="o">(</span>bars<span class="o">)</span>
+</code></pre></div>
+
+<p>And there we have it! I hope you enjoyed this little project. And if you didn't, well, too bad, no refunds.</p>
+<h2>What's next?</h2>
+<p>Well, hopefully our new AGI overlords hold off on nuking us a la Terminator 2 for the time being. Barring that, however, I would love to support querying against locally-hosted GPT variants. Also, while in principle if the input were reworked this could work on windows in powershell or something, the prompt would need to be adjusted so system detection and subsequent prompt variation would be a cool feature to add here. If you have any ideas, <a href="https://github.com/msnidal/attercop/issues">please do open an issue</a> or fork it and shoot me a pull request for that matter! And of course stars are always welcomed - its lonely out here in the GitHub void. And, on that note, I'm going to go back to my cave now. Goodbye and thanks for reading!</p>
+    </div>
+  </article>
+    </div>
+  </div>
+
+  <footer class="footer">
+    <div class="container">
+<div class="row">
+  <ul class="col-sm-6 list-inline">
+      <li class="list-inline-item"><a href="/authors.html">Authors</a></li>
+    <li class="list-inline-item"><a href="/archives.html">Archives</a></li>
+    <li class="list-inline-item"><a href="/categories.html">Categories</a></li>
+  </ul>
+  <p class="col-sm-6 text-sm-right text-muted">
+    Generated by <a href="https://github.com/getpelican/pelican" target="_blank">Pelican</a>
+    / <a href="https://github.com/nairobilug/pelican-alchemy" target="_blank">&#x2728;</a>
+  </p>
+</div>    </div>
+  </footer>
+
+</body>
+
+</html>
